@@ -64,6 +64,7 @@ uint64_t buffer_input[FFT_N];
 uint64_t buffer_output[FFT_N];
 struct timeval get_time[FFT_COMPLEX_MAX][FFT_DIR_MAX][TEST_TIME_MAX];
 const int print_lines = FFT_N / 8;
+const int HW_FFT_COUNT = 100;
 
 uint16_t get_bit1_num(uint32_t data)
 {
@@ -73,13 +74,9 @@ uint16_t get_bit1_num(uint32_t data)
     return num;
 }
 
-extern void do_exception_test();
-
 int main(void)
 {
     printf("Started\n");
-
-    // do_exception_test();
 
     int32_t i;
     float tempf1[4];
@@ -114,13 +111,14 @@ int main(void)
         input_data->I2 = data_hard[2 * i + 1].imag;
     }
 
-    extern uintptr_t fft_file_;
-    printf("fft_file %p\n", (void *)fft_file_);
-
     /* FFT hard calculation. */
+    /* warmup dmas? */
+    fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
     printf("FFT hard calculation.\n");
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_START], NULL);
-    fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
+    for (int i=0; i<HW_FFT_COUNT; i++) {
+        fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
+    }
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_STOP], NULL);
 
     /* FFT soft calculation. */
@@ -180,7 +178,9 @@ int main(void)
     /* IFFT hard calculation. */
     printf("IFFT hard calculation.\n");
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_START], NULL);
-    fft_complex_uint16(FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
+    for (int i=0; i<HW_FFT_COUNT; i++) {
+        fft_complex_uint16(FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
+    }
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_STOP], NULL);
 
     /* IFFT soft calculation. */
@@ -209,9 +209,9 @@ int main(void)
     printf("[hard ][%d bytes][forward time = %ld us][backward time = %ld us]\n",
            FFT_N,
            ((get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_STOP].tv_sec - get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_START].tv_sec) * 1000 * 1000 +
-            (get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_STOP].tv_usec - get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_START].tv_usec)),
+            (get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_STOP].tv_usec - get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_START].tv_usec))/HW_FFT_COUNT,
            ((get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_STOP].tv_sec - get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_START].tv_sec) * 1000 * 1000 +
-            (get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_STOP].tv_usec - get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_START].tv_usec)));
+            (get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_STOP].tv_usec - get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_START].tv_usec))/HW_FFT_COUNT);
     printf("[soft ][%d bytes][forward time = %ld us][backward time = %ld us]\n",
            FFT_N,
            (get_time[FFT_SOFT][FFT_DIR_FORWARD][TEST_STOP].tv_sec - get_time[FFT_SOFT][FFT_DIR_FORWARD][TEST_START].tv_sec) * 1000 * 1000 +
