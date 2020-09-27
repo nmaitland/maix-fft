@@ -20,7 +20,9 @@
 #include <encoding.h>
 #include <devices.h>
 #include <encoding.h>
-#include "fft_soft.h"
+#include "fft_test/fft_soft.h"
+#include "fft_epic/GLOBALS.HPP"
+#include "fft_epic/COMPREAL.HPP"
 
 #define FFT_N 512U
 /**
@@ -33,6 +35,8 @@
 #define FFT_BACKWARD_SHIFT 0x1ffU
 #define PI 3.14159265358979323846
 
+extern void fft_epic(int numelems, compreal data[], enum directions forinv, enum trantype operation);
+
 typedef struct _complex_hard
 {
     int16_t real;
@@ -43,6 +47,7 @@ enum _complex_mode
 {
     FFT_HARD = 0,
     FFT_SOFT = 1,
+    FFT_EPIC = 2,
     FFT_COMPLEX_MAX,
 };
 
@@ -53,12 +58,14 @@ enum _time_get
     TEST_TIME_MAX,
 };
 
-int16_t real[FFT_N];
-int16_t imag[FFT_N];
+// int16_t real[FFT_N];
+// int16_t imag[FFT_N];
 float hard_power[FFT_N];
 float soft_power[FFT_N];
+float epic_power[FFT_N];
 float hard_angel[FFT_N];
 float soft_angel[FFT_N];
+float epic_angel[FFT_N];
 uint64_t fft_out_data[FFT_N / 2];
 uint64_t buffer_input[FFT_N];
 uint64_t buffer_output[FFT_N];
@@ -74,9 +81,15 @@ uint16_t get_bit1_num(uint32_t data)
     return num;
 }
 
-int main(void)
+extern "C" handle_t dma_open_free();
+extern "C" void dma_close(handle_t);
+
+extern "C" int main(void)
 {
     printf("Started\n");
+
+    handle_t dma_write = dma_open_free();
+    dma_close(dma_write);
 
     int32_t i;
     float tempf1[4];
@@ -85,6 +98,7 @@ int main(void)
     uint16_t bit1_num = get_bit1_num(FFT_FORWARD_SHIFT);
     complex_hard_t data_hard[FFT_N] = {0};
     complex data_soft[FFT_N] = {0};
+    compreal data_epic[FFT_N];
 
     /* Data prepared for fft hard calculation and fft soft calculation. */
     printf("Data prepared for fft hard calculation and fft soft calculation.\n");
@@ -98,6 +112,7 @@ int main(void)
         data_hard[i].imag = (int16_t)0;
         data_soft[i].real = data_hard[i].real;
         data_soft[i].imag = data_hard[i].imag;
+        data_epic[i] = compreal(data_hard[i].real, data_hard[i].imag);
     }
 
     /* Data format conversion for hard fft module. */
@@ -127,6 +142,12 @@ int main(void)
     fft_soft(data_soft, FFT_N);
     gettimeofday(&get_time[FFT_SOFT][FFT_DIR_FORWARD][TEST_STOP], NULL);
 
+    /* FFT epic calculation. */
+    printf("FFT epic calculation.\n");
+    gettimeofday(&get_time[FFT_EPIC][FFT_DIR_FORWARD][TEST_START], NULL);
+    fft_epic(FFT_N, data_epic, FORWARD, NODIVIDE);
+    gettimeofday(&get_time[FFT_EPIC][FFT_DIR_FORWARD][TEST_STOP], NULL);
+
     /* Data format conversion get from hard fft module output. */
     printf("Data format conversion get from hard fft module output.\n");
     for (i = 0; i < FFT_N / 2; i++)
@@ -140,30 +161,37 @@ int main(void)
 
     /* Compare the difference between hardware fft and software fft calculation. */
     printf("Compare the difference between hardware fft and software fft calculation.\n");
-    printf("\n[hard fft real][soft fft real][hard fft imag][soft fft imag]\n");
+    printf("\n[hard fft real][soft fft real][epic fft real][hard fft imag][soft fft imag][epic fft imag]\n");
     for (i = 0; i < print_lines; i++)
-        printf("%3d:%7d %7d diff: %7d %7d %7d\n",
+        printf("%3d:%7d %7d %7d %7d %7d %7d\n",
                 i, 
-                data_hard[i].real, (int32_t)data_soft[i].real, (int32_t)data_soft[i].real - data_hard[i].real, 
-                data_hard[i].imag, (int32_t)data_soft[i].imag);
+                data_hard[i].real, (int32_t)data_soft[i].real, (int32_t)data_epic[i].real(), 
+                data_hard[i].imag, (int32_t)data_soft[i].imag, (int32_t)data_epic[i].imag());
 
     /* Power calculation. */
     for (i = 0; i < FFT_N; i++)
     {
         hard_power[i] = sqrt(data_hard[i].real * data_hard[i].real + data_hard[i].imag * data_hard[i].imag) * 2;
         soft_power[i] = sqrt(data_soft[i].real * data_soft[i].real + data_soft[i].imag * data_soft[i].imag) * 2;
+        epic_power[i] = sqrt(data_epic[i].real() * data_epic[i].real() + data_epic[i].imag() * data_epic[i].imag()) * 2;
     }
-    printf("\nhard power  soft power:\n");
-    printf("%3d : %f  %f\n", 0, hard_power[0] / 2 / FFT_N * (1 << bit1_num), soft_power[0] / 2 / FFT_N);
-    for (i = 1; i < print_lines; i++)
-        printf("%3d : %f  %f\n", i, hard_power[i] / FFT_N * (1 << bit1_num), soft_power[i] / FFT_N);
+    printf("\nhard power  soft power   epic power:\n");
+    for (i = 0; i < print_lines; i++)
+        printf("%3d : %f  %f %f\n", i, 
+            hard_power[i] / FFT_N * (1 << bit1_num), 
+            soft_power[i] / FFT_N,
+            epic_power[i] / FFT_N);
 
-    printf("\nhard phase  soft phase:\n");
+    printf("\nhard phase  soft phase  epic phase:\n");
     for (i = 0; i < print_lines; i++)
     {
         hard_angel[i] = atan2(data_hard[i].imag, data_hard[i].real);
         soft_angel[i] = atan2(data_soft[i].imag, data_soft[i].real);
-        printf("%3d : %f  %f\n", i, hard_angel[i] * 180 / PI, soft_angel[i] * 180 / PI);
+        epic_angel[i] = atan2(data_epic[i].imag(), data_epic[i].real());
+        printf("%3d : %f  %f %f\n", i, 
+        hard_angel[i] * 180 / PI, 
+        soft_angel[i] * 180 / PI,
+        epic_angel[i] * 180 / PI);
     }
 
     for (int i = 0; i < FFT_N / 2; ++i)
@@ -189,6 +217,12 @@ int main(void)
     ifft_soft(data_soft, FFT_N);
     gettimeofday(&get_time[FFT_SOFT][FFT_DIR_BACKWARD][TEST_STOP], NULL);
 
+    /* FFT epic calculation. */
+    printf("IFFT epic calculation.\n");
+    gettimeofday(&get_time[FFT_EPIC][FFT_DIR_BACKWARD][TEST_START], NULL);
+    fft_epic(FFT_N, data_epic, INVERSE, DIVIDE);
+    gettimeofday(&get_time[FFT_EPIC][FFT_DIR_BACKWARD][TEST_STOP], NULL);
+
     /* Data format conversion get from hard fft module output. */
     for (i = 0; i < FFT_N / 2; i++)
     {
@@ -200,10 +234,12 @@ int main(void)
     }
 
     /* Compare the difference between hardware ifft and software ifft calculation. */
-    printf("\n[hard ifft real][soft ifft real][hard ifft imag][soft ifft imag]\n");
+    printf("\nifft real[hard][soft][epic]  ifft imag[hard][soft][epic]\n");
     for (i = 0; i < print_lines; i++)
-        printf("%3d:%7d  %7d %7d %7d\n",
-            i, data_hard[i].real, (int32_t)data_soft[i].real, data_hard[i].imag, (int32_t)data_soft[i].imag);
+        printf("%3d:%7d  %7d %7d %7d %7d %7d\n",
+            i, 
+            data_hard[i].real, (int32_t)data_soft[i].real, (int32_t)data_epic[i].real(),
+            data_hard[i].imag, (int32_t)data_soft[i].imag, (int32_t)data_epic[i].imag());
 
     /* Compare time. */
     printf("[hard ][%d bytes][forward time = %ld us][backward time = %ld us]\n",
@@ -218,6 +254,12 @@ int main(void)
                (get_time[FFT_SOFT][FFT_DIR_FORWARD][TEST_STOP].tv_usec - get_time[FFT_SOFT][FFT_DIR_FORWARD][TEST_START].tv_usec),
            (get_time[FFT_SOFT][FFT_DIR_BACKWARD][TEST_STOP].tv_sec - get_time[FFT_SOFT][FFT_DIR_BACKWARD][TEST_START].tv_sec) * 1000 * 1000 +
                (get_time[FFT_SOFT][FFT_DIR_BACKWARD][TEST_STOP].tv_usec - get_time[FFT_SOFT][FFT_DIR_BACKWARD][TEST_START].tv_usec));
+    printf("[epic ][%d bytes][forward time = %ld us][backward time = %ld us]\n",
+           FFT_N,
+           (get_time[FFT_EPIC][FFT_DIR_FORWARD][TEST_STOP].tv_sec - get_time[FFT_EPIC][FFT_DIR_FORWARD][TEST_START].tv_sec) * 1000 * 1000 +
+               (get_time[FFT_EPIC][FFT_DIR_FORWARD][TEST_STOP].tv_usec - get_time[FFT_EPIC][FFT_DIR_FORWARD][TEST_START].tv_usec),
+           (get_time[FFT_EPIC][FFT_DIR_BACKWARD][TEST_STOP].tv_sec - get_time[FFT_EPIC][FFT_DIR_BACKWARD][TEST_START].tv_sec) * 1000 * 1000 +
+               (get_time[FFT_EPIC][FFT_DIR_BACKWARD][TEST_STOP].tv_usec - get_time[FFT_EPIC][FFT_DIR_BACKWARD][TEST_START].tv_usec));
     while (1)
         ;
     return 0;

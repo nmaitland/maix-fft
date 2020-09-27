@@ -7,8 +7,15 @@
 
 typedef struct{double real, imag;} complex;
 
-void fft_soft(complex *data, int n);
-void ifft_soft(complex *data, int n);
-void show(complex *data, int n);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    void fft_soft(complex *data, int n);
+    void ifft_soft(complex *data, int n);
+    void show(complex *data, int n);
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _FFT_SOFT_H */
