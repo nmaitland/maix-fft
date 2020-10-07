@@ -17,9 +17,12 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
-#include <encoding.h>
-#include <devices.h>
-#include <encoding.h>
+#include <math.h>
+#include "encoding.h"
+#include "dmac.h"
+#include "fft.h"
+#include "encoding.h"
+#include "sysctl.h"
 #include "fft_test/fft_soft.h"
 #include "fft_epic/GLOBALS.HPP"
 #include "fft_epic/COMPREAL.HPP"
@@ -81,15 +84,9 @@ uint16_t get_bit1_num(uint32_t data)
     return num;
 }
 
-extern "C" handle_t dma_open_free();
-extern "C" void dma_close(handle_t);
-
 extern "C" int main(void)
 {
     printf("Started\n");
-
-    handle_t dma_write = dma_open_free();
-    dma_close(dma_write);
 
     int32_t i;
     float tempf1[4];
@@ -128,11 +125,10 @@ extern "C" int main(void)
 
     /* FFT hard calculation. */
     /* warmup dmas? */
-    fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
     printf("FFT hard calculation.\n");
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_START], NULL);
     for (int i=0; i<HW_FFT_COUNT; i++) {
-        fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
+       fft_complex_uint16_dma(DMAC_CHANNEL0, DMAC_CHANNEL1, FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
     }
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_STOP], NULL);
 
@@ -207,8 +203,8 @@ extern "C" int main(void)
     printf("IFFT hard calculation.\n");
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_START], NULL);
     for (int i=0; i<HW_FFT_COUNT; i++) {
-        fft_complex_uint16(FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
-    }
+        fft_complex_uint16_dma(DMAC_CHANNEL0, DMAC_CHANNEL1, FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
+     }
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_STOP], NULL);
 
     /* IFFT soft calculation. */
