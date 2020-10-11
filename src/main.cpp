@@ -63,9 +63,9 @@ enum _time_get
 float hard_power[FFT_N];
 float soft_power[FFT_N];
 float epic_power[FFT_N];
-float hard_angel[FFT_N];
-float soft_angel[FFT_N];
-float epic_angel[FFT_N];
+float hard_angle[FFT_N];
+float soft_angle[FFT_N];
+float epic_angle[FFT_N];
 uint64_t fft_out_data[FFT_N / 2];
 uint64_t buffer_input[FFT_N];
 uint64_t buffer_output[FFT_N];
@@ -87,9 +87,6 @@ extern "C" void dma_close(handle_t);
 extern "C" int main(void)
 {
     printf("Started\n");
-
-    handle_t dma_write = dma_open_free();
-    dma_close(dma_write);
 
     int32_t i;
     float tempf1[4];
@@ -128,11 +125,17 @@ extern "C" int main(void)
 
     /* FFT hard calculation. */
     /* warmup dmas? */
-    fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
     printf("FFT hard calculation.\n");
+
+    // discount first fft - it takes ages...
+    fft_init();
+    fft_do(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
+    fft_close();
+
+    fft_init();
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_START], NULL);
     for (int i=0; i<HW_FFT_COUNT; i++) {
-        fft_complex_uint16(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
+        fft_do(FFT_FORWARD_SHIFT, FFT_DIR_FORWARD, buffer_input, FFT_N, buffer_output);
     }
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_FORWARD][TEST_STOP], NULL);
 
@@ -185,13 +188,13 @@ extern "C" int main(void)
     printf("\nhard phase  soft phase  epic phase:\n");
     for (i = 0; i < print_lines; i++)
     {
-        hard_angel[i] = atan2(data_hard[i].imag, data_hard[i].real);
-        soft_angel[i] = atan2(data_soft[i].imag, data_soft[i].real);
-        epic_angel[i] = atan2(data_epic[i].imag(), data_epic[i].real());
+        hard_angle[i] = atan2(data_hard[i].imag, data_hard[i].real);
+        soft_angle[i] = atan2(data_soft[i].imag, data_soft[i].real);
+        epic_angle[i] = atan2(data_epic[i].imag(), data_epic[i].real());
         printf("%3d : %f  %f %f\n", i, 
-        hard_angel[i] * 180 / PI, 
-        soft_angel[i] * 180 / PI,
-        epic_angel[i] * 180 / PI);
+        hard_angle[i] * 180 / PI, 
+        soft_angle[i] * 180 / PI,
+        epic_angle[i] * 180 / PI);
     }
 
     for (int i = 0; i < FFT_N / 2; ++i)
@@ -205,11 +208,14 @@ extern "C" int main(void)
 
     /* IFFT hard calculation. */
     printf("IFFT hard calculation.\n");
+    // fft_complex_uint16(FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_START], NULL);
     for (int i=0; i<HW_FFT_COUNT; i++) {
-        fft_complex_uint16(FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
+        
+        fft_do(FFT_BACKWARD_SHIFT, FFT_DIR_BACKWARD, buffer_input, FFT_N, buffer_output);
     }
     gettimeofday(&get_time[FFT_HARD][FFT_DIR_BACKWARD][TEST_STOP], NULL);
+    fft_close();
 
     /* IFFT soft calculation. */
     printf("IFFT soft calculation.\n");
